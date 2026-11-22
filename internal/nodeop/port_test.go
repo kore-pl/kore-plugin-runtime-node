@@ -13,7 +13,7 @@ import (
 func TestPortBoundaries(t *testing.T) {
 	for _, port := range []int{0, 1024, 8080, 65535} {
 		params, _ := json.Marshal(allocatePortParams{Preferred: port})
-		result, perr := Call("node.allocatePort", params, nil)
+		result, perr := Call("runtime-node.allocatePort", params, nil)
 		if perr != nil {
 			t.Fatalf("端口 %d 应合法，错误=%v", port, perr)
 		}
@@ -23,7 +23,7 @@ func TestPortBoundaries(t *testing.T) {
 	}
 	for _, port := range []int{-1, 1, 1023, 65536, 100000} {
 		params, _ := json.Marshal(allocatePortParams{Preferred: port})
-		_, perr := Call("node.allocatePort", params, nil)
+		_, perr := Call("runtime-node.allocatePort", params, nil)
 		if perr == nil || perr.Code != pluginapi.E_INVALID {
 			t.Fatalf("端口 %d 应返回 E_INVALID，错误=%v", port, perr)
 		}
@@ -37,7 +37,7 @@ func TestExecPortOutOfRange(t *testing.T) {
 		allocatePort: func(int) (int, error) { return 70000, nil },
 	}
 	params := json.RawMessage(`{"preferred":8080}`)
-	_, perr := Call("node.allocatePort", params, badExec)
+	_, perr := Call("runtime-node.allocatePort", params, badExec)
 	if perr == nil || perr.Code != pluginapi.E_INTERNAL {
 		t.Fatalf("执行面越界应返回 E_INTERNAL，错误=%v", perr)
 	}

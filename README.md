@@ -6,13 +6,13 @@ Node 运行时插件（**基础级骨架**）：覆盖 Node 进程守护 / 端�
 
 - `kore.plugin.v1`，`lifecycle=lazy`，`depth_level=basic`
 - 能力声明：`system:admin`
-- 方法：`node.versions` / `node.allocatePort`（同时接受裸 `versions` / `allocatePort`）
+- 方法：`runtime-node.versions` / `runtime-node.allocatePort`（域必须等于插件 id `runtime-node`，PLUGIN-PROTOCOL §7.2；不接受裸动词或旧 `node.` 前缀，v0.1.0 无存量用户不做兼容层）
 - 握手的 stdout 留给协议帧，日志一律写 stderr
 
 ## 方法口径（骨架）
 
-- `node.versions`：返回支持的 Node 版本白名单 `18 / 20 / 22`；`family` 可省略，给出时只接受 `node`。不查询宿主 node 安装情况。
-- `node.allocatePort`：`preferred` 可省略（0，由调度侧决定）；给出时必须在 `1024-65535` 内。结果结构含 `allocated` 字段，**骨架口径恒为 false**，不执行任何 bind / 端口占用。
+- `runtime-node.versions`：返回支持的 Node 版本白名单 `18 / 20 / 22`；`family` 可省略，给出时只接受 `node`。不查询宿主 node 安装情况。
+- `runtime-node.allocatePort`：`preferred` 可省略（0，由调度侧决定）；给出时必须在 `1024-65535` 内。结果结构含 `allocated` 字段，**骨架口径恒为 false**，不执行任何 bind / 端口占用。
 
 两个方法都只做参数校验 + 结构化结果；非法参数返回 `E_INVALID`，未知方法返回 `E_NOTFOUND`。参数必须是 JSON 对象，未知字段一律拒绝。
 

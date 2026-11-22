@@ -15,8 +15,8 @@ func TestDispatchMethods(t *testing.T) {
 		params string
 		want   string
 	}{
-		{"node.versions", `{}`, `"count":3`},
-		{"node.allocatePort", `{"preferred":8080}`, `"port":8080`},
+		{"runtime-node.versions", `{}`, `"count":3`},
+		{"runtime-node.allocatePort", `{"preferred":8080}`, `"port":8080`},
 	}
 	for _, c := range cases {
 		req := &pluginapi.Request{
@@ -43,10 +43,10 @@ func TestDispatchReject(t *testing.T) {
 		params string
 		code   string
 	}{
-		{"node.versions", `{"family":"python"}`, pluginapi.E_INVALID},
-		{"node.allocatePort", `{"preferred":80}`, pluginapi.E_INVALID},
-		{"node.allocatePort", `{"preferred":70000}`, pluginapi.E_INVALID},
-		{"node.exec", `{}`, pluginapi.E_NOTFOUND},
+		{"runtime-node.versions", `{"family":"python"}`, pluginapi.E_INVALID},
+		{"runtime-node.allocatePort", `{"preferred":80}`, pluginapi.E_INVALID},
+		{"runtime-node.allocatePort", `{"preferred":70000}`, pluginapi.E_INVALID},
+		{"runtime-node.exec", `{}`, pluginapi.E_NOTFOUND},
 	}
 	for _, c := range cases {
 		req := &pluginapi.Request{

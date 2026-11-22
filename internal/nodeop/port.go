@@ -12,10 +12,10 @@ import (
 func callAllocatePort(params json.RawMessage, exec Executor) (json.RawMessage, *pluginapi.Error) {
 	var p allocatePortParams
 	if err := strictUnmarshal(params, &p); err != nil {
-		return nil, invalid("node.allocatePort 参数非法: " + err.Error())
+		return nil, invalid("runtime-node.allocatePort 参数非法: " + err.Error())
 	}
 	if p.Preferred != 0 && (p.Preferred < minPort || p.Preferred > maxPort) {
-		return nil, invalid(fmt.Sprintf("node.allocatePort 端口 %d 越界，允许 %d-%d", p.Preferred, minPort, maxPort))
+		return nil, invalid(fmt.Sprintf("runtime-node.allocatePort 端口 %d 越界，允许 %d-%d", p.Preferred, minPort, maxPort))
 	}
 	chosen, err := exec.AllocatePort(p.Preferred)
 	if err != nil {

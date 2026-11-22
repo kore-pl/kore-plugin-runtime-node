@@ -13,7 +13,7 @@ const (
 	version22 = "22"
 )
 
-// allowedVersions 是 node.versions 返回的受支持版本白名单。
+// allowedVersions 是 runtime-node.versions 返回的受支持版本白名单。
 var allowedVersions = []string{version18, version20, version22}
 
 // FaultKind 标识一次故障注入的类别（basic 级只覆盖 kill / timeout）。
@@ -55,14 +55,14 @@ type allocatePortParams struct {
 	Preferred int `json:"preferred"`
 }
 
-// VersionsResult 是 node.versions 的结构化结果。
+// VersionsResult 是 runtime-node.versions 的结构化结果。
 type VersionsResult struct {
 	Versions []string `json:"versions"`
 	Count    int      `json:"count"`
 	Applied  bool     `json:"applied"`
 }
 
-// AllocatePortResult 是 node.allocatePort 的结构化结果。
+// AllocatePortResult 是 runtime-node.allocatePort 的结构化结果。
 // 骨架口径下 allocated=false，port 回显的是校验通过的请求端口，不代表真占用。
 type AllocatePortResult struct {
 	Port      int  `json:"port"`

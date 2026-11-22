@@ -11,10 +11,10 @@ import (
 func callVersions(params json.RawMessage, exec Executor) (json.RawMessage, *pluginapi.Error) {
 	var p versionsParams
 	if err := strictUnmarshal(params, &p); err != nil {
-		return nil, invalid("node.versions 参数非法: " + err.Error())
+		return nil, invalid("runtime-node.versions 参数非法: " + err.Error())
 	}
 	if p.Family != "" && p.Family != "node" {
-		return nil, invalid("node.versions family 只接受 node，收到: " + p.Family)
+		return nil, invalid("runtime-node.versions family 只接受 node，收到: " + p.Family)
 	}
 	versions, err := exec.Versions()
 	if err != nil {
