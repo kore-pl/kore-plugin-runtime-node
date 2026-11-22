@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.0 (2026-11-23)
+
+- feat: `runtime-node.versions` 改为**真实检测**宿主 Node 安装（PATH 的 node/nodejs、nvm、常见路径、`/opt/node*`），
+  归一化版本号、按真实路径去重、`is_default` 由 `which node` 决定；未检测到 Node 时返回 `count=0` + 固定 hint，不报错
+- feat: 新增 `runtime-node.info`：真实 `node/npm --version`、V8、OpenSSL 与 `npm ls -g --depth=0 --json` 全局包数
+- feat: 新增 `runtime-node.projects`：扫描 root（深度 ≤3 / 条目 ≤200）下的 Node 项目，
+  返回 name/version/engines_node/dependencies_count/has_lock；`package.json` 只读前 64 KiB，坏 JSON 跳过并写 warnings
+- feat: 新增 `runtime-node.doctor`：真实检查 Node / npm / `npm root -g` 可写 / NODE_ENV / 多版本冲突（可选项目目录检查）
+- security: root 白名单（`/var/www`、`/opt`、`/home`、`<state>`）+ `ResolveExisting` + 符号链接二次归属校验；
+  外部命令固定 argv + 5s 超时；不执行项目脚本、只读元数据
+- refactor: 移除骨架方法 `runtime-node.allocatePort` 与 `noopExecutor`（0.2.0 方法面为 versions / info / projects / doctor）
+- test: 真实 E2E（本机 Node/npm/V8、`/tmp/kore-node-test` 三项目、二进制空 PATH 降级路径）；
+  `tests/fault/` 扩到四类故障注入（kill / timeout / disk / cgroup）
+
 ## 0.1.1 (2026-11-23)
 
 - refactor: 方法名统一为 runtime-node.<action>，对齐协议域校验

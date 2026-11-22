@@ -1,7 +1,7 @@
-// Package main 是 kore 的 runtime-node 插件：Node 运行时的方法面骨架。
+// Package main 是 kore 的 runtime-node 插件：Node.js 运行时的检测与只读管理方法面。
 //
-// runtime-node 只做协议握手 + 参数校验 + 结构化结果，不真起 node 进程、
-// 不真分配端口、不内置任何 node 二进制（提案 §2.1 批2 / 深度 basic）。
+// runtime-node 做协议握手 + 真实探测宿主 Node（PATH / nvm / 常见路径）、单版本详情、
+// Node 项目扫描与健康检查；不内置任何 node 二进制、不执行项目脚本、不写宿主文件。
 //
 // 协议面（kore.plugin.v1）：UDS → kore.hello 握手 → 会话循环读 request、
 // 按 method 分发并回 response；stdout 留给协议，日志一律写 stderr。

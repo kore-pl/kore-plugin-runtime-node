@@ -6,7 +6,7 @@ import (
 	"github.com/pengtang1024/kore-plugin-runtime-node/internal/nodeop"
 )
 
-// TestTimeoutFault 注入调用超时，期望两方法返回 E_UPSTREAM。
+// TestTimeoutFault 注入调用超时，期望四方法返回 E_UPSTREAM。
 func TestTimeoutFault(t *testing.T) {
 	assertFault(t, nodeop.FaultTimeout, "E_UPSTREAM", "超时")
 }

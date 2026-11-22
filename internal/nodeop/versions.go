@@ -6,37 +6,24 @@ import (
 	"github.com/pengtang1024/kore/pkg/pluginapi"
 )
 
-// callVersions 校验参数并返回受支持的 Node 版本白名单（不真查询宿主 node）。
-// family 可省略；给出时只接受 "node"，其余返回 E_INVALID。
+// callVersions 处理 runtime-node.versions：无参数，返回宿主全部已安装 Node。
+// 未检测到任何 Node 时不报错，返回空数组 + count=0 + hint。
 func callVersions(params json.RawMessage, exec Executor) (json.RawMessage, *pluginapi.Error) {
 	var p versionsParams
 	if err := strictUnmarshal(params, &p); err != nil {
 		return nil, invalid("runtime-node.versions 参数非法: " + err.Error())
 	}
-	if p.Family != "" && p.Family != "node" {
-		return nil, invalid("runtime-node.versions family 只接受 node，收到: " + p.Family)
-	}
-	versions, err := exec.Versions()
+	result, err := exec.Versions()
 	if err != nil {
 		return nil, classify(err)
 	}
-	result := VersionsResult{Versions: versions, Count: len(versions), Applied: false}
-	return marshal(result)
-}
-
-// noopVersions 返回白名单副本，不读宿主环境（骨架口径）。
-func noopVersions() []string {
-	out := make([]string, len(allowedVersions))
-	copy(out, allowedVersions)
-	return out
-}
-
-// isAllowedVersion 判断版本是否在白名单内（供测试与后续生产实现复用）。
-func isAllowedVersion(v string) bool {
-	for _, allowed := range allowedVersions {
-		if v == allowed {
-			return true
-		}
+	if result.Versions == nil {
+		result.Versions = []NodeVersion{}
 	}
-	return false
+	result.Count = len(result.Versions)
+	if result.Count == 0 {
+		result.DefaultVersion = ""
+		result.Hint = NoNodeHint
+	}
+	return marshal(result)
 }

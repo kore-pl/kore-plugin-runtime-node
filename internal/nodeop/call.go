@@ -9,21 +9,27 @@ import (
 	"github.com/pengtang1024/kore/pkg/pluginapi"
 )
 
-// Call 执行一个 node 方法：先校验方法名与参数，再调用执行面并结构化结果。
-// exec 为 nil 时使用 noopExecutor（骨架口径，不真起进程、不真占端口）。
-func Call(method string, params json.RawMessage, exec Executor) (json.RawMessage, *pluginapi.Error) {
+// Call 执行一个 runtime-node 方法：先校验方法名与参数（含 root 白名单），
+// 再调用执行面并结构化结果。exec 为 nil 时使用真实探测执行面。
+//
+// stateRoot 是插件状态目录（KORE_NODE_ROOT），它本身也是 root 白名单的一项。
+func Call(method string, params json.RawMessage, stateRoot string, exec Executor) (json.RawMessage, *pluginapi.Error) {
 	verb, ok := businessVerb(method)
 	if !ok {
 		return nil, errNotFound(method)
 	}
 	if exec == nil {
-		exec = noopExecutor{}
+		exec = NewExecutor()
 	}
 	switch verb {
 	case "versions":
 		return callVersions(params, exec)
-	case "allocatePort":
-		return callAllocatePort(params, exec)
+	case "info":
+		return callInfo(params, exec)
+	case "projects":
+		return callProjects(params, exec, stateRoot)
+	case "doctor":
+		return callDoctor(params, exec, stateRoot)
 	}
 	return nil, errNotFound(method)
 }
@@ -31,20 +37,20 @@ func Call(method string, params json.RawMessage, exec Executor) (json.RawMessage
 // methodPrefix 是方法名的插件域前缀：协议要求 `<plugin-id>.<action>`（PLUGIN-PROTOCOL §7.2）。
 const methodPrefix = "runtime-node."
 
-// businessVerb 把 runtime-node.<verb> 归一为动词名；域不是本插件 id 的一律拒绝（不再接受裸动词）。
+// businessVerb 把 runtime-node.<verb> 归一为动词名；域不是本插件 id 的一律拒绝。
 func businessVerb(method string) (string, bool) {
 	verb, ok := strings.CutPrefix(method, methodPrefix)
 	if !ok {
 		return "", false
 	}
 	switch verb {
-	case "versions", "allocatePort":
+	case "versions", "info", "projects", "doctor":
 		return verb, true
 	}
 	return "", false
 }
 
-// strictUnmarshal 只接受 JSON 对象入参（拒绝数组/标量/null/空载荷）。
+// strictUnmarshal 只接受 JSON 对象入参（拒绝数组/标量/null/空载荷），且拒绝未知字段。
 func strictUnmarshal(params json.RawMessage, out any) error {
 	trimmed := bytes.TrimSpace(params)
 	if len(trimmed) == 0 || trimmed[0] != '{' {
@@ -61,16 +67,19 @@ func strictUnmarshal(params json.RawMessage, out any) error {
 	return nil
 }
 
-// marshal 把结构化结果编码为 result 载荷。
+// marshal 把结构化结果编码为 result 载荷（关闭 HTML 转义，便于人读与证据留档）。
 func marshal(v any) (json.RawMessage, *pluginapi.Error) {
-	data, err := json.Marshal(v)
-	if err != nil {
+	var buffer bytes.Buffer
+	encoder := json.NewEncoder(&buffer)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(v); err != nil {
 		return nil, internalErr("序列化结果失败: " + err.Error())
 	}
-	return data, nil
+	return json.RawMessage(bytes.TrimRight(buffer.Bytes(), "\n")), nil
 }
 
-// classify 把执行面错误映射为协议错误码：两类基础故障均为 E_UPSTREAM。
+// classify 把执行面错误映射为协议错误码：
+// 未装 Node → E_NOTFOUND；指定版本未装 → E_INVALID；四类故障各有对应；其余 E_INTERNAL。
 func classify(err error) *pluginapi.Error {
 	var fe *FaultError
 	if errors.As(err, &fe) {
@@ -79,7 +88,17 @@ func classify(err error) *pluginapi.Error {
 			return upstream("进程被信号 9 终止: " + fe.Message)
 		case FaultTimeout:
 			return upstream("调用超时: " + fe.Message)
+		case FaultDisk:
+			return internalErr("磁盘满: " + fe.Message)
+		case FaultCgroup:
+			return unsupported("cgroup 限额触发: " + fe.Message)
 		}
+	}
+	switch {
+	case errors.Is(err, ErrNodeNotInstalled):
+		return notFound(NoNodeHint)
+	case errors.Is(err, ErrVersionNotInstalled):
+		return invalid(err.Error())
 	}
 	return internalErr("执行面失败: " + err.Error())
 }
@@ -92,10 +111,18 @@ func errNotFound(method string) *pluginapi.Error {
 	return &pluginapi.Error{Code: pluginapi.E_NOTFOUND, Message: "未知方法: " + method}
 }
 
+func notFound(msg string) *pluginapi.Error {
+	return &pluginapi.Error{Code: pluginapi.E_NOTFOUND, Message: msg}
+}
+
 func upstream(msg string) *pluginapi.Error {
 	return &pluginapi.Error{Code: pluginapi.E_UPSTREAM, Message: msg}
 }
 
 func internalErr(msg string) *pluginapi.Error {
 	return &pluginapi.Error{Code: pluginapi.E_INTERNAL, Message: msg}
+}
+
+func unsupported(msg string) *pluginapi.Error {
+	return &pluginapi.Error{Code: pluginapi.E_UNSUPPORTED, Message: msg}
 }

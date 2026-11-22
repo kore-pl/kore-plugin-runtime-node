@@ -8,10 +8,13 @@ import (
 	"github.com/pengtang1024/kore/pkg/pluginapi"
 )
 
-// TestBusinessVerb 方法名归一化：只接受 runtime-node.<verb>，域不符或裸动词一律拒绝。
+// TestBusinessVerb 方法名归一化：只接受 4 个 runtime-node.<verb>，域不符或裸动词一律拒绝。
 func TestBusinessVerb(t *testing.T) {
 	cases := map[string]string{
-		"runtime-node.versions": "versions", "runtime-node.allocatePort": "allocatePort",
+		"runtime-node.versions": "versions",
+		"runtime-node.info":     "info",
+		"runtime-node.projects": "projects",
+		"runtime-node.doctor":   "doctor",
 	}
 	for method, want := range cases {
 		got, ok := businessVerb(method)
@@ -19,60 +22,165 @@ func TestBusinessVerb(t *testing.T) {
 			t.Fatalf("businessVerb(%q)=(%q,%v)，期望 (%q,true)", method, got, ok, want)
 		}
 	}
-	for _, method := range []string{"runtime-node.exec", "node.versions", "versions", "runtime-node."} {
+	for _, method := range []string{
+		"runtime-node.allocatePort", "node.versions", "versions", "runtime-node.info2", "runtime-node.",
+	} {
 		if _, ok := businessVerb(method); ok {
 			t.Fatalf("businessVerb(%q) 不应被接受", method)
 		}
 	}
 }
 
-// TestCallResults 两方法正常路径返回结构化结果。
-func TestCallResults(t *testing.T) {
-	versions, perr := Call("runtime-node.versions", json.RawMessage(`{}`), nil)
-	if perr != nil || !strings.Contains(string(versions), `"count":3`) {
-		t.Fatalf("runtime-node.versions 结果=%s err=%v", versions, perr)
+// TestCallVersionsNoNode 未检测到 Node 时 versions 不报错：空数组 + count=0 + 固定 hint。
+func TestCallVersionsNoNode(t *testing.T) {
+	exec := &stubExecutor{versions: VersionsResult{}}
+	raw, perr := Call("runtime-node.versions", json.RawMessage(`{}`), "", exec)
+	if perr != nil {
+		t.Fatalf("未安装 Node 时不应报错: %v", perr)
 	}
-	if !strings.Contains(string(versions), `"22"`) || strings.Contains(string(versions), `"24"`) {
-		t.Fatalf("版本白名单错误: %s", versions)
+	var result VersionsResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		t.Fatalf("解析结果失败: %v", err)
 	}
-	port, perr := Call("runtime-node.allocatePort", json.RawMessage(`{"preferred":3000}`), nil)
-	if perr != nil || !strings.Contains(string(port), `"port":3000`) {
-		t.Fatalf("runtime-node.allocatePort 结果=%s err=%v", port, perr)
+	if result.Count != 0 || len(result.Versions) != 0 {
+		t.Fatalf("期望空版本列表: %+v", result)
 	}
-	if !strings.Contains(string(port), `"allocated":false`) {
-		t.Fatalf("骨架口径下 allocated 应为 false: %s", port)
+	if result.Hint != NoNodeHint {
+		t.Fatalf("hint=%q，期望 %q", result.Hint, NoNodeHint)
+	}
+	if !strings.Contains(string(raw), `"versions":[]`) {
+		t.Fatalf("versions 必须是空数组而非 null: %s", raw)
 	}
 }
 
-// TestCallParamValidation 非法 JSON 形状返回 E_INVALID。
+// TestCallVersionsResult 已安装时返回版本列表、默认版本与计数。
+func TestCallVersionsResult(t *testing.T) {
+	exec := &stubExecutor{versions: VersionsResult{
+		Versions: []NodeVersion{
+			{Version: "18.19.0", Path: "/usr/bin/node", Source: SourcePath, IsDefault: true},
+		},
+		DefaultVersion: "18.19.0",
+	}}
+	raw, perr := Call("runtime-node.versions", json.RawMessage(`{}`), "", exec)
+	if perr != nil {
+		t.Fatalf("versions 意外错误: %v", perr)
+	}
+	if !strings.Contains(string(raw), `"default_version":"18.19.0"`) || !strings.Contains(string(raw), `"count":1`) {
+		t.Fatalf("结果=%s", raw)
+	}
+}
+
+// TestCallInfoNormalizesVersion 输入 v18.19.0 归一为 18.19.0 后交给执行面。
+func TestCallInfoNormalizesVersion(t *testing.T) {
+	exec := &stubExecutor{info: InfoResult{Version: "18.19.0"}}
+	if _, perr := Call("runtime-node.info", json.RawMessage(`{"version":"v18.19.0"}`), "", exec); perr != nil {
+		t.Fatalf("info 意外错误: %v", perr)
+	}
+	if exec.infoArg != "18.19.0" {
+		t.Fatalf("执行面收到版本=%q，期望 18.19.0", exec.infoArg)
+	}
+}
+
+// TestCallErrorMapping 执行面错误按协议映射：未装 Node → E_NOTFOUND，版本未装 → E_INVALID。
+func TestCallErrorMapping(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		code string
+	}{
+		{"node_missing", ErrNodeNotInstalled, pluginapi.E_NOTFOUND},
+		{"version_missing", wrapVersionError("20.0.0"), pluginapi.E_INVALID},
+		{"kill", NewFaultError(FaultKill, "被终止"), pluginapi.E_UPSTREAM},
+		{"timeout", NewFaultError(FaultTimeout, "超时"), pluginapi.E_UPSTREAM},
+		{"disk", NewFaultError(FaultDisk, "磁盘满"), pluginapi.E_INTERNAL},
+		{"cgroup", NewFaultError(FaultCgroup, "限额"), pluginapi.E_UNSUPPORTED},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			exec := &stubExecutor{infoErr: c.err}
+			_, perr := Call("runtime-node.info", json.RawMessage(`{}`), "", exec)
+			if perr == nil || perr.Code != c.code {
+				t.Fatalf("错误=%v，期望 %q", perr, c.code)
+			}
+		})
+	}
+}
+
+// wrapVersionError 构造与生产实现同形的「指定版本未安装」错误。
+func wrapVersionError(version string) error {
+	return &versionError{version: version}
+}
+
+type versionError struct{ version string }
+
+func (e *versionError) Error() string { return ErrVersionNotInstalled.Error() + ": " + e.version }
+
+func (e *versionError) Is(target error) bool { return target == ErrVersionNotInstalled }
+
+// TestCallParamValidation 非法 JSON 形状、未知字段、非法版本与越权 root 均返回 E_INVALID。
 func TestCallParamValidation(t *testing.T) {
-	bad := []string{`[]`, `not-json`, ``, `null`, `{"family":"node"}extra`, `{"preferred":8080,"junk":1}`}
-	for _, params := range bad {
-		_, perr := Call("runtime-node.allocatePort", json.RawMessage(params), nil)
+	stateRoot := t.TempDir()
+	cases := []struct {
+		method string
+		params string
+	}{
+		{"runtime-node.versions", `[]`},
+		{"runtime-node.versions", `null`},
+		{"runtime-node.versions", `{"family":"node"}`},
+		{"runtime-node.info", `{"version":18}`},
+		{"runtime-node.info", `{"version":"18.19"}`},
+		{"runtime-node.info", `{"version":"18.19.0","junk":1}`},
+		{"runtime-node.projects", `{}`},
+		{"runtime-node.projects", `{"root":"relative/path"}`},
+		{"runtime-node.projects", `{"root":"/etc"}`},
+		{"runtime-node.projects", `{"root":"/var/www/../etc"}`},
+		{"runtime-node.doctor", `{"root":"/etc"}`},
+	}
+	for _, c := range cases {
+		_, perr := Call(c.method, json.RawMessage(c.params), stateRoot, &stubExecutor{})
 		if perr == nil || perr.Code != pluginapi.E_INVALID {
-			t.Fatalf("Call(allocatePort,%q) 错误=%v，期望 E_INVALID", params, perr)
+			t.Fatalf("Call(%s,%s) 错误=%v，期望 E_INVALID", c.method, c.params, perr)
 		}
+	}
+}
+
+// TestCallProjectsPassesValidatedRoot 合法 root 经白名单解析后传给执行面。
+func TestCallProjectsPassesValidatedRoot(t *testing.T) {
+	stateRoot := t.TempDir()
+	exec := &stubExecutor{projects: ProjectsResult{}}
+	raw, perr := Call("runtime-node.projects", json.RawMessage(`{"root":"`+stateRoot+`"}`), stateRoot, exec)
+	if perr != nil {
+		t.Fatalf("projects 意外错误: %v", perr)
+	}
+	if exec.projectsArg == "" {
+		t.Fatal("执行面未收到 root")
+	}
+	if !strings.Contains(string(raw), `"projects":[]`) || !strings.Contains(string(raw), `"warnings":[]`) {
+		t.Fatalf("结果应为空数组而非 null: %s", raw)
+	}
+}
+
+// TestCallDoctorOptionalRoot doctor 的 root 可省略（不触发项目检查）。
+func TestCallDoctorOptionalRoot(t *testing.T) {
+	exec := &stubExecutor{doctor: DoctorResult{Checks: []Check{{Name: "node", Status: StatusPass, Detail: "ok"}}}}
+	raw, perr := Call("runtime-node.doctor", json.RawMessage(`{}`), t.TempDir(), exec)
+	if perr != nil {
+		t.Fatalf("doctor 意外错误: %v", perr)
+	}
+	if exec.doctorArg != "" {
+		t.Fatalf("未给 root 时执行面应收空串，实际=%q", exec.doctorArg)
+	}
+	if !strings.Contains(string(raw), `"ok":true`) {
+		t.Fatalf("结果=%s", raw)
 	}
 }
 
 // TestCallUnknownMethod 未知方法返回 E_NOTFOUND。
 func TestCallUnknownMethod(t *testing.T) {
-	_, perr := Call("runtime-node.exec", json.RawMessage(`{}`), nil)
-	if perr == nil || perr.Code != pluginapi.E_NOTFOUND {
-		t.Fatalf("未知方法错误=%v，期望 E_NOTFOUND", perr)
-	}
-}
-
-// TestIsAllowedVersion 版本白名单只含 18/20/22。
-func TestIsAllowedVersion(t *testing.T) {
-	for _, v := range []string{"18", "20", "22"} {
-		if !isAllowedVersion(v) {
-			t.Fatalf("版本 %s 应在白名单", v)
-		}
-	}
-	for _, v := range []string{"16", "21", "24", ""} {
-		if isAllowedVersion(v) {
-			t.Fatalf("版本 %q 不应在白名单", v)
+	for _, method := range []string{"runtime-node.exec", "runtime-node.allocatePort", "versions"} {
+		_, perr := Call(method, json.RawMessage(`{}`), "", &stubExecutor{})
+		if perr == nil || perr.Code != pluginapi.E_NOTFOUND {
+			t.Fatalf("Call(%q) 错误=%v，期望 E_NOTFOUND", method, perr)
 		}
 	}
 }

@@ -8,44 +8,77 @@ import (
 	"github.com/pengtang1024/kore/pkg/pluginapi"
 )
 
-// TestDispatchMethods 两个 node 方法经 dispatch 返回结构化结果。
-func TestDispatchMethods(t *testing.T) {
-	cases := []struct {
-		method string
-		params string
-		want   string
-	}{
-		{"runtime-node.versions", `{}`, `"count":3`},
-		{"runtime-node.allocatePort", `{"preferred":8080}`, `"port":8080`},
+// TestDispatchVersions 版本检测经 dispatch 返回真实探测结果（本机无 Node 时 count=0 + hint）。
+func TestDispatchVersions(t *testing.T) {
+	req := &pluginapi.Request{
+		Type: pluginapi.TypeRequest, ID: "id", ReqID: "r",
+		Method: "runtime-node.versions", Params: json.RawMessage(`{}`),
 	}
-	for _, c := range cases {
-		req := &pluginapi.Request{
-			Type: pluginapi.TypeRequest, ID: "id", ReqID: "r",
-			Method: c.method, Params: json.RawMessage(c.params),
-		}
-		resp, shutdown := dispatch(req, testConfig(), testLogger())
-		if shutdown {
-			t.Fatalf("%s 不应触发 shutdown", c.method)
-		}
-		if resp.Error != nil {
-			t.Fatalf("%s 意外错误: %v", c.method, resp.Error)
-		}
-		if !strings.Contains(string(resp.Result), c.want) {
-			t.Fatalf("%s 结果=%s，未含 %q", c.method, resp.Result, c.want)
-		}
+	resp, shutdown := dispatch(req, testConfig(), testLogger())
+	if shutdown {
+		t.Fatal("versions 不应触发 shutdown")
+	}
+	if resp.Error != nil {
+		t.Fatalf("versions 意外错误: %v", resp.Error)
+	}
+	var result struct {
+		Count int    `json:"count"`
+		Hint  string `json:"hint"`
+	}
+	if err := json.Unmarshal(resp.Result, &result); err != nil {
+		t.Fatalf("解析结果失败: %v（%s）", err, resp.Result)
+	}
+	if result.Count == 0 && result.Hint != "未检测到 Node.js，可从 https://nodejs.org 安装或用 nvm" {
+		t.Fatalf("count=0 时 hint 不匹配: %s", resp.Result)
 	}
 }
 
-// TestDispatchReject 非法版本 family 与越界端口经 dispatch 返回 E_INVALID。
+// TestDispatchInfo 详情经 dispatch 返回；本机无 Node 时按 E_NOTFOUND 降级。
+func TestDispatchInfo(t *testing.T) {
+	req := &pluginapi.Request{
+		Type: pluginapi.TypeRequest, ID: "id", ReqID: "r",
+		Method: "runtime-node.info", Params: json.RawMessage(`{}`),
+	}
+	resp, _ := dispatch(req, testConfig(), testLogger())
+	if resp.Error != nil {
+		if resp.Error.Code != pluginapi.E_NOTFOUND {
+			t.Fatalf("info 错误码=%q，期望 E_NOTFOUND 或成功", resp.Error.Code)
+		}
+		return
+	}
+	if !strings.Contains(string(resp.Result), `"node_path"`) {
+		t.Fatalf("info 结果缺少 node_path: %s", resp.Result)
+	}
+}
+
+// TestDispatchDoctor doctor 经 dispatch 返回检查项列表。
+func TestDispatchDoctor(t *testing.T) {
+	req := &pluginapi.Request{
+		Type: pluginapi.TypeRequest, ID: "id", ReqID: "r",
+		Method: "runtime-node.doctor", Params: json.RawMessage(`{}`),
+	}
+	resp, _ := dispatch(req, testConfig(), testLogger())
+	if resp.Error != nil {
+		t.Fatalf("doctor 意外错误: %v", resp.Error)
+	}
+	if !strings.Contains(string(resp.Result), `"checks":[`) || !strings.Contains(string(resp.Result), `"status"`) {
+		t.Fatalf("doctor 结果缺少检查项: %s", resp.Result)
+	}
+}
+
+// TestDispatchReject 非法参数与越权 root 经 dispatch 返回协议错误。
 func TestDispatchReject(t *testing.T) {
 	cases := []struct {
 		method string
 		params string
 		code   string
 	}{
-		{"runtime-node.versions", `{"family":"python"}`, pluginapi.E_INVALID},
-		{"runtime-node.allocatePort", `{"preferred":80}`, pluginapi.E_INVALID},
-		{"runtime-node.allocatePort", `{"preferred":70000}`, pluginapi.E_INVALID},
+		{"runtime-node.versions", `{"family":"node"}`, pluginapi.E_INVALID},
+		{"runtime-node.info", `{"version":"18.19"}`, pluginapi.E_INVALID},
+		{"runtime-node.projects", `{}`, pluginapi.E_INVALID},
+		{"runtime-node.projects", `{"root":"/etc"}`, pluginapi.E_INVALID},
+		{"runtime-node.doctor", `{"root":"/etc"}`, pluginapi.E_INVALID},
+		{"runtime-node.allocatePort", `{"preferred":8080}`, pluginapi.E_NOTFOUND},
 		{"runtime-node.exec", `{}`, pluginapi.E_NOTFOUND},
 	}
 	for _, c := range cases {

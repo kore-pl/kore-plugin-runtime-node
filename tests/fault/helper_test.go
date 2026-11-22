@@ -1,5 +1,6 @@
-// Package fault 对 runtime-node 插件做两类基础故障注入（basic 级）。
-// 每个用例向 nodeop.Call 的执行面注入一种故障，断言两个方法返回的结构化错误码。
+// Package fault 对 runtime-node 插件做四类故障注入（kill / timeout / disk / cgroup）。
+// 每个用例向 nodeop.Call 的执行面注入一种故障，断言四个方法返回的结构化错误码；
+// 另外配 sanity 用例（无故障正常返回），防止"永远失败"的假通过。
 package fault
 
 import (
@@ -10,36 +11,54 @@ import (
 	"github.com/pengtang1024/kore/pkg/pluginapi"
 )
 
-// faultExecutor 按注入类别让每个方法都失败，模拟两类运行时故障。
+// faultExecutor 按注入类别让每个方法都失败，模拟四类运行时故障。
 type faultExecutor struct {
 	kind nodeop.FaultKind
 }
 
-func (f faultExecutor) Versions() ([]string, error) {
-	return nil, nodeop.NewFaultError(f.kind, "versions 执行面故障")
+func (f faultExecutor) Versions() (nodeop.VersionsResult, error) {
+	return nodeop.VersionsResult{}, nodeop.NewFaultError(f.kind, "versions 执行面故障")
 }
 
-func (f faultExecutor) AllocatePort(int) (int, error) {
-	return 0, nodeop.NewFaultError(f.kind, "allocatePort 执行面故障")
+func (f faultExecutor) Info(string) (nodeop.InfoResult, error) {
+	return nodeop.InfoResult{}, nodeop.NewFaultError(f.kind, "info 执行面故障")
 }
 
-// methods 是两类故障注入覆盖的方法及其合法参数。
-var methods = []struct {
+func (f faultExecutor) Projects(string) (nodeop.ProjectsResult, error) {
+	return nodeop.ProjectsResult{}, nodeop.NewFaultError(f.kind, "projects 执行面故障")
+}
+
+func (f faultExecutor) Doctor(string) (nodeop.DoctorResult, error) {
+	return nodeop.DoctorResult{}, nodeop.NewFaultError(f.kind, "doctor 执行面故障")
+}
+
+// methodCase 是一个待注入故障的方法及其合法参数（root 由 testRoot 动态生成）。
+type methodCase struct {
 	name   string
 	method string
-	params string
-}{
-	{"versions", "runtime-node.versions", `{}`},
-	{"allocatePort", "runtime-node.allocatePort", `{"preferred":3000}`},
+	params func(root string) string
 }
 
-// assertFault 对每个方法注入故障，断言返回 nil 结果 + 预期的协议错误码与类别关键词。
+// methods 覆盖四个方法；root 使用状态目录白名单（t.TempDir 作为 <state>）。
+var methods = []methodCase{
+	{"versions", "runtime-node.versions", func(string) string { return `{}` }},
+	{"info", "runtime-node.info", func(string) string { return `{}` }},
+	{"projects", "runtime-node.projects", func(root string) string {
+		return `{"root":` + jsonString(root) + `}`
+	}},
+	{"doctor", "runtime-node.doctor", func(root string) string {
+		return `{"root":` + jsonString(root) + `}`
+	}},
+}
+
+// assertFault 对每个方法注入故障，断言返回 nil 结果 + 预期协议错误码与类别关键词。
 func assertFault(t *testing.T, kind nodeop.FaultKind, wantCode, wantHint string) {
 	t.Helper()
+	root := t.TempDir()
 	exec := faultExecutor{kind: kind}
 	for _, m := range methods {
 		t.Run(m.name, func(t *testing.T) {
-			result, perr := nodeop.Call(m.method, json.RawMessage(m.params), exec)
+			result, perr := nodeop.Call(m.method, json.RawMessage(m.params(root)), root, exec)
 			if perr == nil {
 				t.Fatalf("%s 注入 %s 后未返回错误（结果=%s）", m.method, kind, result)
 			}
@@ -56,6 +75,41 @@ func assertFault(t *testing.T, kind nodeop.FaultKind, wantCode, wantHint string)
 	}
 }
 
+// sanityNoFault 验证无故障时四方法正常返回，证明故障断言不是"永远失败"的假通过。
+func sanityNoFault(t *testing.T) {
+	t.Helper()
+	root := t.TempDir()
+	for _, m := range methods {
+		result, perr := nodeop.Call(m.method, json.RawMessage(m.params(root)), root, nil)
+		if perr != nil {
+			t.Fatalf("无故障时 %s 意外返回错误: %v", m.method, perr)
+		}
+		if len(result) == 0 {
+			t.Fatalf("无故障时 %s 返回空结果", m.method)
+		}
+	}
+}
+
+// verifyErrorContract 断言错误体是标准协议结构（非空 code/message）。
+func verifyErrorContract(t *testing.T, perr *pluginapi.Error) {
+	t.Helper()
+	if perr == nil {
+		t.Fatal("错误体为 nil")
+	}
+	if perr.Code == "" || perr.Message == "" {
+		t.Fatalf("错误体字段不完整: %+v", perr)
+	}
+}
+
+// jsonString 把路径编码为 JSON 字符串字面量（路径里的反斜杠/引号会被正确转义）。
+func jsonString(value string) string {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return `""`
+	}
+	return string(encoded)
+}
+
 // contains 是 strings.Contains 的本地封装，避免每个 fault 文件重复 import strings。
 func contains(s, sub string) bool {
 	if len(sub) > len(s) {
@@ -67,29 +121,4 @@ func contains(s, sub string) bool {
 		}
 	}
 	return false
-}
-
-// sanityNoFault 验证无故障时两方法正常返回，证明故障断言不是"永远失败"的假通过。
-func sanityNoFault(t *testing.T) {
-	t.Helper()
-	for _, m := range methods {
-		result, perr := nodeop.Call(m.method, json.RawMessage(m.params), nil)
-		if perr != nil {
-			t.Fatalf("无故障时 %s 意外返回错误: %v", m.method, perr)
-		}
-		if len(result) == 0 {
-			t.Fatalf("无故障时 %s 返回空结果", m.method)
-		}
-	}
-}
-
-// verifyErrorContract 断言错误体是标准协议结构（含 code 字段）。
-func verifyErrorContract(t *testing.T, perr *pluginapi.Error) {
-	t.Helper()
-	if perr == nil {
-		t.Fatal("错误体为 nil")
-	}
-	if perr.Code == "" || perr.Message == "" {
-		t.Fatalf("错误体字段不完整: %+v", perr)
-	}
 }
