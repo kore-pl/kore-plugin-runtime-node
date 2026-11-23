@@ -126,7 +126,7 @@ func TestLoadConfigEmbedded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadConfig 失败: %v", err)
 	}
-	if cfg.id != "runtime-node" || cfg.version != "0.2.2" {
+	if cfg.id != "runtime-node" || cfg.version != "0.2.3" {
 		t.Fatalf("id/version=%q/%q", cfg.id, cfg.version)
 	}
 	if len(cfg.capabilities) != 1 || cfg.capabilities[0] != "system:admin" {

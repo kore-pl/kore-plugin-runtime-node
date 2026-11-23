@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.3] - 2026-11-23
+
+### Changed
+- 提升为 `production` 深度等级（故障注入测试已覆盖）
+
 ## 0.2.2 (2026-11-23)
 
 - fix: `runtime-node.paths` 的两处口径修正（原 0.2.1 已发布，按「改 dist sha 必须 bump」升 patch）：

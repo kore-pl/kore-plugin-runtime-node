@@ -1,10 +1,10 @@
 {
   "id": "runtime-node",
   "name": "Node 运行时插件",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "protocol": "kore.plugin.v1",
   "lifecycle": "lazy",
-  "depth_level": "basic",
+  "depth_level": "production",
   "entry": "bin/runtime-node",
   "capabilities": ["system:admin"],
   "method_capabilities": {
@@ -20,5 +20,5 @@
   "depends_on": [],
   "conflicts": [],
   "scenario_tags": ["app"],
-  "size_bytes": 1502821
+  "size_bytes": 1502834
 }
