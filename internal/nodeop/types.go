@@ -26,6 +26,8 @@ const (
 	NoNodeHint = "未检测到 Node.js，可从 https://nodejs.org 安装或用 nvm"
 	// PackageManager 是本插件关联的包管理器名（versions[].package_manager 的固定取值）。
 	PackageManager = "npm"
+	// PathDefaultHint 是「装了 Node 但 PATH 上没有 node」时的默认版本解析提示。
+	PathDefaultHint = "PATH 上未找到 node；已安装的 Node 仍在 versions 列表中，但无法确定默认版本，请检查 PATH"
 )
 
 // runtimeBinaryNames 是 PATH 解析与 paths 方法共用的候选可执行文件名（按优先级）。

@@ -125,7 +125,7 @@ npm/V8/OpenSSL 单项探测失败只让对应字段为空串，不放大为整�
 }
 ```
 
-- `search_order` 的条目顺序 = 实际探测优先级（PATH → nvm → 常见路径），只列**命中的**来源；重复路径按真实文件去重
+- `search_order` 的条目顺序 = 实际探测优先级（PATH → nvm → 常见路径），只列**真实存在**的来源；同一路径只列一次（软链仍按来源保留，便于解释多版本来源）
 - 未检测到 Node 时不报错：`default.found=false`、`search_order=[]`，并给与 `versions` 相同的 `hint`
 
 ## 安全

@@ -377,10 +377,13 @@ func (r *Runtime) Paths() (PathsResult, error) {
 		result.Executables = append(result.Executables, entry)
 	}
 	result.Default = r.defaultRuntime()
+	result.SearchOrder = r.searchOrder()
 	if !result.Default.Found {
 		result.Hint = NoNodeHint
+		if len(result.SearchOrder) > 0 {
+			result.Hint = PathDefaultHint
+		}
 	}
-	result.SearchOrder = r.searchOrder()
 	return result, nil
 }
 
@@ -403,11 +406,14 @@ func (r *Runtime) defaultRuntime() DefaultRuntime {
 	return entry
 }
 
-// searchOrder 把 candidates() 按来源分组（保持探测顺序），给出去重后的命中路径。
+// searchOrder 把 candidates() 按来源分组（保持探测顺序），只保留真实存在的命中路径。
 func (r *Runtime) searchOrder() []SearchSource {
 	order := make([]SearchSource, 0, 4)
 	index := map[Source]int{}
 	for _, item := range r.candidates() {
+		if _, ok := resolveCandidate(item.path); !ok {
+			continue // 固定已知路径不一定存在：search_order 只列命中的来源
+		}
 		if position, ok := index[item.source]; ok {
 			order[position].Paths = append(order[position].Paths, item.path)
 			continue

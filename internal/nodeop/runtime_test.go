@@ -506,3 +506,23 @@ func TestPathsWithoutNode(t *testing.T) {
 		t.Fatalf("空环境结果异常: %+v", result)
 	}
 }
+
+// TestPathsInstalledButNotOnPath 装了 Node 但 PATH 上没有 node：hint 指向 PATH 问题而非「未检测到」。
+func TestPathsInstalledButNotOnPath(t *testing.T) {
+	layout := newFakeLayout(t)
+	runtime := layout.runtime(func(string) string { return "/nonexistent" })
+	runtime.lookPath = func(string) (string, error) { return "", errors.New("not found") }
+	result, err := runtime.Paths()
+	if err != nil {
+		t.Fatalf("Paths 失败: %v", err)
+	}
+	if result.Default.Found {
+		t.Fatalf("PATH 无 node 时不应解析出默认条目: %+v", result.Default)
+	}
+	if len(result.SearchOrder) == 0 {
+		t.Fatalf("known/nvm 候选存在时 search_order 不应为空")
+	}
+	if result.Hint != PathDefaultHint {
+		t.Fatalf("hint=%q，期望 %q", result.Hint, PathDefaultHint)
+	}
+}
