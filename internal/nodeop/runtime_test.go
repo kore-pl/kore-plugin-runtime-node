@@ -401,3 +401,108 @@ func TestDirWritableAccess(t *testing.T) {
 		t.Fatalf("临时目录应可写（reason=%s）", reason)
 	}
 }
+
+// TestDetectInstallMetadata versions 增强字段：安装目录、包管理器与包管理器路径。
+func TestDetectInstallMetadata(t *testing.T) {
+	layout := newFakeLayout(t)
+	result, err := layout.runtime(os.Getenv).Versions()
+	if err != nil {
+		t.Fatalf("Versions 失败: %v", err)
+	}
+	if result.Count != 2 {
+		t.Fatalf("期望 2 个安装，实际 %+v", result.Versions)
+	}
+	pathEntry := result.Versions[0]
+	if pathEntry.BinDir != filepath.Dir(layout.pathNode) {
+		t.Fatalf("bin_dir=%q，期望 %q", pathEntry.BinDir, filepath.Dir(layout.pathNode))
+	}
+	if pathEntry.PackageManager != PackageManager {
+		t.Fatalf("package_manager=%q，期望 %q", pathEntry.PackageManager, PackageManager)
+	}
+	if pathEntry.PackageManagerPath != layout.npmPath {
+		t.Fatalf("同目录 npm 应优先：package_manager_path=%q，期望 %q", pathEntry.PackageManagerPath, layout.npmPath)
+	}
+	knownEntry := result.Versions[1]
+	if knownEntry.BinDir != filepath.Dir(layout.knownNode) {
+		t.Fatalf("已知路径条目 bin_dir=%q", knownEntry.BinDir)
+	}
+	if knownEntry.PackageManagerPath != layout.npmPath {
+		t.Fatalf("无同目录 npm 时应回退 PATH：%q，期望 %q", knownEntry.PackageManagerPath, layout.npmPath)
+	}
+}
+
+// TestPathsReportsSearchOrderAndDefault paths 方法：PATH 顺序、可执行名解析、默认解析链与来源顺序。
+func TestPathsReportsSearchOrderAndDefault(t *testing.T) {
+	layout := newFakeLayout(t)
+	runtime := layout.runtime(func(string) string { return "/usr/local/bin:/usr/bin" })
+	result, err := runtime.Paths()
+	if err != nil {
+		t.Fatalf("Paths 失败: %v", err)
+	}
+	if len(result.PathEnv) != 2 || result.PathEnv[0] != "/usr/local/bin" || result.PathEnv[1] != "/usr/bin" {
+		t.Fatalf("path_env=%v", result.PathEnv)
+	}
+	if len(result.Executables) != 2 {
+		t.Fatalf("executables=%+v", result.Executables)
+	}
+	for _, entry := range result.Executables {
+		if !entry.Found || entry.Path != layout.pathNode {
+			t.Fatalf("可执行名解析异常: %+v", entry)
+		}
+	}
+	if !result.Default.Found || result.Default.Command != "node" {
+		t.Fatalf("default 解析异常: %+v", result.Default)
+	}
+	if result.Default.Path != layout.pathNode || result.Default.Version != "18.19.0" {
+		t.Fatalf("default=%+v", result.Default)
+	}
+	if result.Default.BinDir != filepath.Dir(layout.pathNode) || result.Default.PackageManagerPath != layout.npmPath {
+		t.Fatalf("default 元信息异常: %+v", result.Default)
+	}
+	if len(result.SearchOrder) != 3 {
+		t.Fatalf("search_order=%+v，期望 path/nvm/known_path 三条", result.SearchOrder)
+	}
+	if result.SearchOrder[0].Source != SourcePath || result.SearchOrder[0].Paths[0] != layout.pathNode {
+		t.Fatalf("第一条来源异常: %+v", result.SearchOrder[0])
+	}
+	if result.SearchOrder[1].Source != SourceNVM || result.SearchOrder[2].Source != SourceKnownPath {
+		t.Fatalf("来源顺序异常: %+v", result.SearchOrder)
+	}
+	// 一致性地基：candidates() 的每条路径都必须出现在 search_order 里（防止两处顺序漂移）。
+	listed := map[string]bool{}
+	for _, source := range result.SearchOrder {
+		for _, path := range source.Paths {
+			listed[path] = true
+		}
+	}
+	for _, item := range runtime.candidates() {
+		if !listed[item.path] {
+			t.Fatalf("候选 %s（source=%s）未出现在 search_order", item.path, item.source)
+		}
+	}
+}
+
+// TestPathsWithoutNode 未安装 Node 时 paths 不报错：default.found=false + hint。
+func TestPathsWithoutNode(t *testing.T) {
+	runtime := &Runtime{
+		runner:     fakeRunner{},
+		lookPath:   func(string) (string, error) { return "", errors.New("not found") },
+		homeDir:    func() (string, error) { return "", errors.New("no home") },
+		glob:       func(string) ([]string, error) { return nil, nil },
+		getenv:     func(string) string { return "" },
+		knownPaths: nil,
+	}
+	result, err := runtime.Paths()
+	if err != nil {
+		t.Fatalf("Paths 失败: %v", err)
+	}
+	if result.Default.Found {
+		t.Fatalf("不应解析出默认 Node: %+v", result.Default)
+	}
+	if result.Hint != NoNodeHint {
+		t.Fatalf("hint=%q，期望 %q", result.Hint, NoNodeHint)
+	}
+	if len(result.PathEnv) != 0 || len(result.SearchOrder) != 0 {
+		t.Fatalf("空环境结果异常: %+v", result)
+	}
+}

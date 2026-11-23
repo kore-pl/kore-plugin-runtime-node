@@ -8,13 +8,14 @@ import (
 	"github.com/pengtang1024/kore/pkg/pluginapi"
 )
 
-// TestBusinessVerb 方法名归一化：只接受 4 个 runtime-node.<verb>，域不符或裸动词一律拒绝。
+// TestBusinessVerb 方法名归一化：只接受 5 个 runtime-node.<verb>，域不符或裸动词一律拒绝。
 func TestBusinessVerb(t *testing.T) {
 	cases := map[string]string{
 		"runtime-node.versions": "versions",
 		"runtime-node.info":     "info",
 		"runtime-node.projects": "projects",
 		"runtime-node.doctor":   "doctor",
+		"runtime-node.paths":    "paths",
 	}
 	for method, want := range cases {
 		got, ok := businessVerb(method)
@@ -182,5 +183,39 @@ func TestCallUnknownMethod(t *testing.T) {
 		if perr == nil || perr.Code != pluginapi.E_NOTFOUND {
 			t.Fatalf("Call(%q) 错误=%v，期望 E_NOTFOUND", method, perr)
 		}
+	}
+}
+
+// TestCallPathsNormalizes 空结果归一：数组字段不为 null，未找到默认 Node 时补 hint。
+func TestCallPathsNormalizes(t *testing.T) {
+	exec := &stubExecutor{paths: PathsResult{}}
+	raw, perr := Call("runtime-node.paths", json.RawMessage(`{}`), "", exec)
+	if perr != nil {
+		t.Fatalf("paths 意外错误: %v", perr)
+	}
+	text := string(raw)
+	for _, want := range []string{`"path_env":[]`, `"executables":[]`, `"search_order":[]`, `"hint":"`} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("结果=%s，缺少 %q", text, want)
+		}
+	}
+}
+
+// TestCallPathsRejectsBadParams 参数必须是 JSON 对象、拒绝未知字段（strictUnmarshal 口径）。
+func TestCallPathsRejectsBadParams(t *testing.T) {
+	for _, params := range []string{`[]`, `null`, ``, `{"verbose":true}`} {
+		_, perr := Call("runtime-node.paths", json.RawMessage(params), "", &stubExecutor{})
+		if perr == nil || perr.Code != pluginapi.E_INVALID {
+			t.Fatalf("params=%q 错误=%v，期望 E_INVALID", params, perr)
+		}
+	}
+}
+
+// TestCallPathsPropagatesFault 执行面故障映射为协议错误码（paths 与其余方法同一口径）。
+func TestCallPathsPropagatesFault(t *testing.T) {
+	exec := &stubExecutor{pathsErr: NewFaultError(FaultTimeout, "paths 超时")}
+	_, perr := Call("runtime-node.paths", json.RawMessage(`{}`), "", exec)
+	if perr == nil || perr.Code != pluginapi.E_UPSTREAM {
+		t.Fatalf("错误=%v，期望 E_UPSTREAM", perr)
 	}
 }

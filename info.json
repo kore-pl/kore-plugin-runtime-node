@@ -1,17 +1,24 @@
 {
   "id": "runtime-node",
   "name": "Node 运行时插件",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "protocol": "kore.plugin.v1",
   "lifecycle": "lazy",
   "depth_level": "basic",
   "entry": "bin/runtime-node",
   "capabilities": ["system:admin"],
+  "method_capabilities": {
+    "runtime-node.versions": "system:read",
+    "runtime-node.info": "system:read",
+    "runtime-node.projects": "system:read",
+    "runtime-node.doctor": "system:read",
+    "runtime-node.paths": "system:read"
+  },
   "triggers": [],
   "requires_kore": ">=0.1.0 <0.2.0",
   "resources": {"memory_mb": 6, "cpu_quota": "15%", "pids_max": 16},
   "depends_on": [],
   "conflicts": [],
   "scenario_tags": ["app"],
-  "size_bytes": 1395873
+  "size_bytes": 1400727
 }

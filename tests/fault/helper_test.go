@@ -32,6 +32,10 @@ func (f faultExecutor) Doctor(string) (nodeop.DoctorResult, error) {
 	return nodeop.DoctorResult{}, nodeop.NewFaultError(f.kind, "doctor 执行面故障")
 }
 
+func (f faultExecutor) Paths() (nodeop.PathsResult, error) {
+	return nodeop.PathsResult{}, nodeop.NewFaultError(f.kind, "paths 执行面故障")
+}
+
 // methodCase 是一个待注入故障的方法及其合法参数（root 由 testRoot 动态生成）。
 type methodCase struct {
 	name   string
@@ -49,6 +53,7 @@ var methods = []methodCase{
 	{"doctor", "runtime-node.doctor", func(root string) string {
 		return `{"root":` + jsonString(root) + `}`
 	}},
+	{"paths", "runtime-node.paths", func(string) string { return `{}` }},
 }
 
 // assertFault 对每个方法注入故障，断言返回 nil 结果 + 预期协议错误码与类别关键词。

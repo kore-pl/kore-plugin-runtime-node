@@ -24,7 +24,15 @@ const (
 	MaxScanEntries = 200
 	// NoNodeHint 是未检测到 Node.js 时的降级提示（versions 不报错）。
 	NoNodeHint = "未检测到 Node.js，可从 https://nodejs.org 安装或用 nvm"
+	// PackageManager 是本插件关联的包管理器名（versions[].package_manager 的固定取值）。
+	PackageManager = "npm"
 )
+
+// runtimeBinaryNames 是 PATH 解析与 paths 方法共用的候选可执行文件名（按优先级）。
+var runtimeBinaryNames = []string{"node", "nodejs"}
+
+// packageManagerNames 是包管理器可执行文件名（同目录优先，其次 PATH）。
+var packageManagerNames = []string{"npm"}
 
 // Source 标识一个 Node 可执行文件的发现渠道。
 type Source string
@@ -90,14 +98,20 @@ type Executor interface {
 	Info(version string) (InfoResult, error)
 	Projects(root string) (ProjectsResult, error)
 	Doctor(root string) (DoctorResult, error)
+	Paths() (PathsResult, error)
 }
 
 // NodeVersion 是一个已安装的 Node 可执行文件。
+// bin_dir 是安装目录（path 的父目录），package_manager 固定为 npm，
+// package_manager_path 优先取同目录 npm、其次 PATH 上的 npm（不执行命令，只做查找）。
 type NodeVersion struct {
-	Version   string `json:"version"`
-	Path      string `json:"path"`
-	Source    Source `json:"source"`
-	IsDefault bool   `json:"is_default"`
+	Version            string `json:"version"`
+	Path               string `json:"path"`
+	Source             Source `json:"source"`
+	IsDefault          bool   `json:"is_default"`
+	BinDir             string `json:"bin_dir"`
+	PackageManager     string `json:"package_manager"`
+	PackageManagerPath string `json:"package_manager_path"`
 }
 
 // VersionsResult 是 runtime-node.versions 的结构化结果。
@@ -152,8 +166,46 @@ type DoctorResult struct {
 	Checks []Check `json:"checks"`
 }
 
-// versionsParams / infoParams / projectsParams / doctorParams 是四个方法的显式入参形状。
+// PathExecutable 是 PATH 上某个候选可执行名的解析结果。
+type PathExecutable struct {
+	Name  string `json:"name"`
+	Path  string `json:"path"`
+	Found bool   `json:"found"`
+}
+
+// DefaultRuntime 是「当前默认 Node 是哪个、怎么解析出来的」。
+type DefaultRuntime struct {
+	Command            string `json:"command"`
+	Path               string `json:"path"`
+	RealPath           string `json:"real_path"`
+	Version            string `json:"version"`
+	BinDir             string `json:"bin_dir"`
+	PackageManager     string `json:"package_manager"`
+	PackageManagerPath string `json:"package_manager_path"`
+	Found              bool   `json:"found"`
+}
+
+// SearchSource 是一条发现来源及其命中路径（顺序与探测优先级一致）。
+type SearchSource struct {
+	Source Source   `json:"source"`
+	Paths  []string `json:"paths"`
+}
+
+// PathsResult 是 runtime-node.paths 的结构化结果：解释「为什么用到了这个版本」。
+// path_env 是宿主 PATH 的原始顺序；executables 是 PATH 解析结果；
+// default 是当前默认 Node 的解析链；search_order 是按探测优先级列出的命中来源。
+type PathsResult struct {
+	PathEnv     []string         `json:"path_env"`
+	Executables []PathExecutable `json:"executables"`
+	Default     DefaultRuntime   `json:"default"`
+	SearchOrder []SearchSource   `json:"search_order"`
+	Hint        string           `json:"hint,omitempty"`
+}
+
+// versionsParams / infoParams / projectsParams / doctorParams / pathsParams 是显式入参形状。
 type versionsParams struct{}
+
+type pathsParams struct{}
 
 type infoParams struct {
 	Version string `json:"version"`

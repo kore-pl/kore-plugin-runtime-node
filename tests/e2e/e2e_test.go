@@ -271,6 +271,16 @@ func (emptyExecutor) Doctor(string) (nodeop.DoctorResult, error) {
 	return nodeop.DoctorResult{Checks: []nodeop.Check{{Name: "node", Status: nodeop.StatusFail, Detail: nodeop.NoNodeHint}}}, nil
 }
 
+func (emptyExecutor) Paths() (nodeop.PathsResult, error) {
+	return nodeop.PathsResult{
+		PathEnv:     []string{"/usr/bin"},
+		Executables: []nodeop.PathExecutable{{Name: "node"}},
+		Default:     nodeop.DefaultRuntime{Command: "node"},
+		SearchOrder: []nodeop.SearchSource{},
+		Hint:        nodeop.NoNodeHint,
+	}, nil
+}
+
 // sameFile 判定两个路径是否指向同一文件（跟随符号链接）。
 func sameFile(left, right string) error {
 	leftReal, err := filepath.EvalSymlinks(left)
