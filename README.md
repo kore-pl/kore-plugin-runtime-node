@@ -155,7 +155,7 @@ npm/V8/OpenSSL 单项探测失败只让对应字段为空串，不放大为整�
 ```bash
 gofmt -l . && go vet ./... && go test -timeout 200s ./...
 make build && make dist
-tar -tzf dist/runtime-node-0.2.3.tar.gz | head -1   # info.json
+tar -tzf dist/runtime-node-0.2.5.tar.gz | head -1   # info.json
 ```
 
 `dist` 使用确定性参数归档（`--sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner` + `gzip -9n`），
@@ -180,7 +180,7 @@ MIT，见 [LICENSE](LICENSE)。
 - **行为准则**：[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)。
 - **兼容性**：`protocol: kore.plugin.v1` · `requires_kore: >=0.1.0 <0.2.0` · `lifecycle: lazy` · 深度等级 `basic`。
 - **验证方式**：本地 `make check` 优先（CI 只在 push main / tag / PR / 手动跑；发布前 `make dist` 连跑两次核对 sha 一致）。
-- **发布产物**：`make dist` → `dist/runtime-node-0.2.3.tar.gz` + `.sha256`（位级可复现，连跑两次 sha 相同）。
+- **发布产物**：`make dist` → `dist/runtime-node-0.2.5.tar.gz` + `.sha256`（位级可复现，连跑两次 sha 相同）。
 - **相关仓库**：[索引 kore-plugins](https://github.com/kore-pl/kore-plugins) · [协议文档](https://github.com/kore-pl/kore/blob/main/docs/PLUGIN-PROTOCOL.md) · [SDK 指南](https://github.com/kore-pl/kore/blob/main/docs/PLUGIN-SDK.md)
 
 <!-- oss:end -->
