@@ -5,7 +5,7 @@ Node.js 运行时插件（**基础级**）：真实检测宿主已安装的 Node
 
 ## 协议面
 
-- `kore.plugin.v1`，`lifecycle=lazy`，`depth_level=production`，插件级能力 `system:admin`（仅作未声明方法的 fail-closed 回退）
+- `kore.plugin.v1`，`lifecycle=lazy`，`depth_level=basic`（核心路径可用；边界用例延 v1.1，非功能降级），插件级能力 `system:admin`（仅作未声明方法的 fail-closed 回退）
 - **方法级能力**（`method_capabilities`）：5 个方法全为 `system:read`——只读探测无需管理权限，内核据此不再把只读调用计入写审计
 - 方法：`runtime-node.versions` / `runtime-node.info` / `runtime-node.projects` / `runtime-node.doctor` / `runtime-node.paths`
   （域必须等于插件 id `runtime-node`，PLUGIN-PROTOCOL §7.2；不接受裸动词或旧 `node.` 前缀）
@@ -178,7 +178,7 @@ MIT，见 [LICENSE](LICENSE)。
 - **贡献**：[CONTRIBUTING.md](CONTRIBUTING.md)（构建、门禁、发版、边界）。
 - **安全**：[SECURITY.md](SECURITY.md)——漏洞不要开公开 issue。
 - **行为准则**：[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)。
-- **兼容性**：`protocol: kore.plugin.v1` · `requires_kore: >=0.1.0 <0.2.0` · `lifecycle: lazy` · 深度等级 `production`。
+- **兼容性**：`protocol: kore.plugin.v1` · `requires_kore: >=0.1.0 <0.2.0` · `lifecycle: lazy` · 深度等级 `basic`。
 - **验证方式**：本地 `make check` 优先（CI 只在 push main / tag / PR / 手动跑；发布前 `make dist` 连跑两次核对 sha 一致）。
 - **发布产物**：`make dist` → `dist/runtime-node-0.2.3.tar.gz` + `.sha256`（位级可复现，连跑两次 sha 相同）。
 - **相关仓库**：[索引 kore-plugins](https://github.com/kore-pl/kore-plugins) · [协议文档](https://github.com/kore-pl/kore/blob/main/docs/PLUGIN-PROTOCOL.md) · [SDK 指南](https://github.com/kore-pl/kore/blob/main/docs/PLUGIN-SDK.md)
