@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Node Runtime Plugin",
+    "description": "Detects installed Node.js, reports version details, scans projects and runs health checks; supports default-version pinning and a minimal single-process daemon, with no bundled node binary.",
+    "detail": "docs/DETAIL.en.md"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Node-Laufzeit-Plugin",
+    "description": "Erkennt installierte Node.js-Versionen des Hosts, fasst Versionsdetails zusammen, scannt Projekte und führt Gesundheitsprüfungen durch; unterstützt das Festlegen der Standardversion und einen lokalen Einzelprozess-Daemon ohne mitgelieferte Node-Binärdatei.",
+    "detail": "docs/DETAIL.de.md"
+  }
+}

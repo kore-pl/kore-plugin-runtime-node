@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Plugin d'exécution Node",
+    "description": "Détecte les installations de Node.js de l'hôte, détaille les versions, analyse les projets et effectue des contrôles de santé ; prend en charge l'épinglage de la version par défaut et un démon local à processus unique, sans embarquer le binaire Node.",
+    "detail": "docs/DETAIL.fr.md"
+  }
+}
