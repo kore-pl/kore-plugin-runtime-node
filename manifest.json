@@ -1,9 +1,10 @@
 {
   "id": "runtime-node",
-  "version": "0.2.5",
+  "version": "0.3.0",
   "protocol": "kore.plugin.v1",
   "requires_kore": ">=0.1.0 <0.2.0",
   "capabilities": [
-    "system:admin"
+    "system:admin",
+    "proc:write"
   ]
 }

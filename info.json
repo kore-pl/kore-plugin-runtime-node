@@ -1,24 +1,41 @@
 {
   "id": "runtime-node",
   "name": "Node 运行时插件",
-  "version": "0.2.5",
+  "version": "0.3.0",
   "protocol": "kore.plugin.v1",
   "lifecycle": "lazy",
   "depth_level": "basic",
   "entry": "bin/runtime-node",
-  "capabilities": ["system:admin"],
+  "capabilities": [
+    "system:admin",
+    "proc:write"
+  ],
   "method_capabilities": {
     "runtime-node.versions": "system:read",
     "runtime-node.info": "system:read",
     "runtime-node.projects": "system:read",
     "runtime-node.doctor": "system:read",
-    "runtime-node.paths": "system:read"
+    "runtime-node.paths": "system:read",
+    "runtime-node.use": "system:admin",
+    "runtime-node.guard.add": "system:admin",
+    "runtime-node.guard.remove": "system:admin",
+    "runtime-node.guard.list": "system:read",
+    "runtime-node.guard.logs": "system:read",
+    "runtime-node.guard.start": "proc:write",
+    "runtime-node.guard.stop": "proc:write",
+    "runtime-node.guard.restart": "proc:write"
   },
   "triggers": [],
   "requires_kore": ">=0.1.0 <0.2.0",
-  "resources": {"memory_mb": 6, "cpu_quota": "15%", "pids_max": 16},
+  "resources": {
+    "memory_mb": 6,
+    "cpu_quota": "15%",
+    "pids_max": 16
+  },
   "depends_on": [],
   "conflicts": [],
-  "scenario_tags": ["app"],
+  "scenario_tags": [
+    "app"
+  ],
   "size_bytes": 1502824
 }

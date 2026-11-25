@@ -8,7 +8,8 @@ import (
 
 // callVersions 处理 runtime-node.versions：无参数，返回宿主全部已安装 Node。
 // 未检测到任何 Node 时不报错，返回空数组 + count=0 + hint。
-func callVersions(params json.RawMessage, exec Executor) (json.RawMessage, *pluginapi.Error) {
+// stateRoot 用来读 pinned_version（用户用 runtime-node.use 钉住的默认版本）。
+func callVersions(params json.RawMessage, exec Executor, stateRoot string) (json.RawMessage, *pluginapi.Error) {
 	var p versionsParams
 	if err := strictUnmarshal(params, &p); err != nil {
 		return nil, invalid("runtime-node.versions 参数非法: " + err.Error())
@@ -24,6 +25,10 @@ func callVersions(params json.RawMessage, exec Executor) (json.RawMessage, *plug
 	if result.Count == 0 {
 		result.DefaultVersion = ""
 		result.Hint = NoNodeHint
+	}
+	if pin, ok := readPin(stateRoot); ok {
+		result.PinnedVersion = pin.Version
+		result.PinnedPath = pin.Path
 	}
 	return marshal(result)
 }

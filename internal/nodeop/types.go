@@ -118,9 +118,13 @@ type NodeVersion struct {
 
 // VersionsResult 是 runtime-node.versions 的结构化结果。
 // 未检测到任何 Node 时 versions 为空数组、count=0、hint 给出安装指引（不报错）。
+// pinned_* 是用户用 runtime-node.use 钉住的默认版本（未钉住时为空）——
+// default_version 永远是「PATH 当前解析到的」，两者区别就是「系统默认 vs Kore 指定」。
 type VersionsResult struct {
 	Versions       []NodeVersion `json:"versions"`
 	DefaultVersion string        `json:"default_version"`
+	PinnedVersion  string        `json:"pinned_version,omitempty"`
+	PinnedPath     string        `json:"pinned_path,omitempty"`
 	Count          int           `json:"count"`
 	Hint           string        `json:"hint,omitempty"`
 }

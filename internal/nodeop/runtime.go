@@ -267,6 +267,20 @@ func (r *Runtime) Info(version string) (InfoResult, error) {
 	return result, nil
 }
 
+// ResolveBin 把版本解析为启停用的可执行文件：指定版本 → 该版本；空 → 默认版本或第一个。
+// 供「进程守护」启动应用时选运行时，未装 Node / 指定版本未装分别返回哨兵错误。
+func (r *Runtime) ResolveBin(version string) (string, error) {
+	versions := r.detect()
+	if len(versions) == 0 {
+		return "", ErrNodeNotInstalled
+	}
+	entry, ok := selectVersion(versions, version)
+	if !ok {
+		return "", fmt.Errorf("%w: %s（已检测: %s）", ErrVersionNotInstalled, version, joinVersionList(versions))
+	}
+	return entry.Path, nil
+}
+
 // selectVersion 选取请求版本；空请求优先默认版本，其次第一个。
 func selectVersion(versions []NodeVersion, version string) (NodeVersion, bool) {
 	if version == "" {

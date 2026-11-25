@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.3.0] - 2026-11-25
+
+### Added
+
+- **进程守护（极简 pm2 同款能力，不做编排）**：`guard.add` / `guard.list` / `guard.start` /
+  `guard.stop` / `guard.restart` / `guard.remove` / `guard.logs`。启动用 `<node> <script> <args...>`
+  拉起脱离会话（setsid）的子进程，stdout/stderr 追加到 `<state>/guard/<name>.log`；
+  停止先给**进程组** SIGTERM、5s 不退升级 SIGKILL；状态含 running / stopped / crashed、PID、运行时长、RSS、
+  日志大小与尾部 500 行。**没有 supervisor 常驻进程**（G-05 无中间件、G-19 不自起 ticker）：
+  插件 lazy 拉起、回完响应即退出，被守护进程独立存活；`guard.start` 幂等，零参数 = 全部启动。
+- **默认版本切换**：`use {version?}` 把已安装版本钉为默认（写 `<state>/default-version.json`，不改宿主 PATH），
+  零参数 = 清除钉住；`versions` 新增 `pinned_version` / `pinned_path`，与 `default_version`（PATH 解析）分开呈现。
+
+### Changed
+
+- 插件级能力 `["system:admin"]` → `["system:admin", "proc:write"]`：守护真的启停本机进程，
+  方法级能力按内核一致性规则（只能收窄、不能跨域放大）需要该域在插件级声明；
+  `method_capabilities` 5 条 → 13 条（guard 启停 = `proc:write`，配置增删与 use = `system:admin`，其余只读）。
+
+### Fixed
+
+- **僵尸进程被误判为运行中**（真机验证发现）：父进程活着时已退出的子进程在 `/proc` 里是 `Z` 状态，
+  原先只判 PID 存在 → 停止后仍显示 running。现在拉起后用一个阻塞在 `Wait` 上的回收 goroutine
+  （事件驱动、退出即结束，不是 ticker）回收子进程并把退出码落盘，`Probe` 同时把 `Z` / `X` 判为不在运行；
+  状态页因此能显示「已退出（退出码 N）」。
+
 ## [0.2.5] - 2026-11-24
 
 ### Changed

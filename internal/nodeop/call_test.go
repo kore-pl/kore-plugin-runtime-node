@@ -8,7 +8,7 @@ import (
 	"github.com/pengtang1024/kore/pkg/pluginapi"
 )
 
-// TestBusinessVerb 方法名归一化：只接受 5 个 runtime-node.<verb>，域不符或裸动词一律拒绝。
+// TestBusinessVerb 方法名归一化：只接受 13 个 runtime-node.<verb>，域不符或裸动词一律拒绝。
 func TestBusinessVerb(t *testing.T) {
 	cases := map[string]string{
 		"runtime-node.versions": "versions",
@@ -16,6 +16,15 @@ func TestBusinessVerb(t *testing.T) {
 		"runtime-node.projects": "projects",
 		"runtime-node.doctor":   "doctor",
 		"runtime-node.paths":    "paths",
+		"runtime-node.use":      "use",
+
+		"runtime-node.guard.add":     "guard.add",
+		"runtime-node.guard.list":    "guard.list",
+		"runtime-node.guard.start":   "guard.start",
+		"runtime-node.guard.stop":    "guard.stop",
+		"runtime-node.guard.restart": "guard.restart",
+		"runtime-node.guard.remove":  "guard.remove",
+		"runtime-node.guard.logs":    "guard.logs",
 	}
 	for method, want := range cases {
 		got, ok := businessVerb(method)
@@ -24,7 +33,8 @@ func TestBusinessVerb(t *testing.T) {
 		}
 	}
 	for _, method := range []string{
-		"runtime-node.allocatePort", "node.versions", "versions", "runtime-node.info2", "runtime-node.",
+		"runtime-node.allocatePort", "node.versions", "versions", "runtime-node.info2",
+		"runtime-node.", "runtime-node.guard", "runtime-node.guard.exec",
 	} {
 		if _, ok := businessVerb(method); ok {
 			t.Fatalf("businessVerb(%q) 不应被接受", method)

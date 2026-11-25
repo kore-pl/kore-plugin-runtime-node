@@ -1,13 +1,18 @@
 # kore-plugin-runtime-node
 
 Node.js 运行时插件（**基础级**）：真实检测宿主已安装的 Node、汇总单版本详情、
-扫描 Node 项目并做健康检查。只读元数据——**不执行项目脚本、不写宿主文件、不内置 node 二进制**。
+扫描 Node 项目并做健康检查；0.3.0 起补**默认版本切换**（把某个已装版本钉给站点与守护用）与
+**单进程守护**（启动 / 停止 / 重启 / 状态 / 日志尾部，类似 pm2 的极简版）。
+**不内置 node 二进制、不引入常驻中间件、不做容器编排**：守护没有 supervisor 进程，
+被守护应用 setsid 脱离会话独立运行，状态全部落盘。
 
 ## 协议面
 
-- `kore.plugin.v1`，`lifecycle=lazy`，`depth_level=basic`（核心路径可用；边界用例延 v1.1，非功能降级），插件级能力 `system:admin`（仅作未声明方法的 fail-closed 回退）
-- **方法级能力**（`method_capabilities`）：5 个方法全为 `system:read`——只读探测无需管理权限，内核据此不再把只读调用计入写审计
-- 方法：`runtime-node.versions` / `runtime-node.info` / `runtime-node.projects` / `runtime-node.doctor` / `runtime-node.paths`
+- `kore.plugin.v1`，`lifecycle=lazy`，`depth_level=basic`（核心路径可用；边界用例延 v1.1，非功能降级），插件级能力 `system:admin` + `proc:write`（后者是守护启停真实进程所需；方法级能力只能收窄、不能跨域放大）
+- **方法级能力**（`method_capabilities`，13 条）：只读探测与列表 / 日志 = `system:read`；
+  版本钉住与守护配置增删 = `system:admin`；`guard.start` / `guard.stop` / `guard.restart` = `proc:write`
+- 方法：`versions` / `info` / `projects` / `doctor` / `paths` / `use` /
+  `guard.add` / `guard.list` / `guard.start` / `guard.stop` / `guard.restart` / `guard.remove` / `guard.logs`
   （域必须等于插件 id `runtime-node`，PLUGIN-PROTOCOL §7.2；不接受裸动词或旧 `node.` 前缀）
 - 握手的 stdout 留给协议帧，日志一律写 stderr；未知方法 `E_NOTFOUND`，参数非法 `E_INVALID`
 
@@ -128,15 +133,63 @@ npm/V8/OpenSSL 单项探测失败只让对应字段为空串，不放大为整�
 - `search_order` 的条目顺序 = 实际探测优先级（PATH → nvm → 常见路径），只列**真实存在**的来源；同一路径只列一次（软链仍按来源保留，便于解释多版本来源）
 - 未检测到 Node 时不报错：`default.found=false`、`search_order=[]`，并给与 `versions` 相同的 `hint`
 
+### `runtime-node.use {version?}`（写操作）
+
+把某个**已安装**版本钉为默认版本（写 `<state>/default-version.json`，原子 rename）：
+
+- 有 `version`：必须命中 `versions` 里已检测到的版本，否则 `E_INVALID` 并附「已检测: …」；
+  成功后 `versions` 的 `pinned_version` / `pinned_path` 回显，`default_version` 仍是「PATH 当前解析到的」——
+  两者分开就是「系统默认 vs Kore 指定」，不改宿主 PATH（零侵入 G-31）
+- 零参数（空对象）：**清除钉住**、恢复跟随系统默认，返回 `{"cleared":true}`（不是参数错误）
+
+```json
+{"version": "18.20.4", "path": "/opt/node18/bin/node", "bin_dir": "/opt/node18/bin", "cleared": false,
+ "updated_at": "2026-11-25T03:14:59Z", "hint": "已设为默认版本；站点与「进程守护」启动时默认用它，可随时切回"}
+```
+
+### 进程守护：`guard.add` / `guard.list` / `guard.start` / `guard.stop` / `guard.restart` / `guard.remove` / `guard.logs`
+
+极简的**本机单进程**守护，不引入常驻中间件（G-05）、不自起 ticker（G-19）：
+
+- `guard.add {name, dir, script, args?, version?}`：注册应用。`name` 匹配 `^[a-z][a-z0-9-]{0,31}$`；
+  `dir` 走与 projects 同一套白名单 + 软链二次校验；`script` 必须在 `dir` 内且是普通文件；
+  `args` ≤16 个、单个 ≤256 字符；`version` 留空用默认版本。**只登记，不启动**
+- `guard.start {names?}`：**幂等**（已在跑的返回 `already_running`，不重复拉起）。零参数 = 全部启动；
+  一个都没注册时返回空结果 + hint（不是错误）。启动用 `<node> <script> <args...>`，工作目录 `dir`，
+  stdout/stderr 追加到 `<state>/guard/<name>.log`，子进程 `setsid` 脱离会话独立存活
+- `guard.stop {names?}`：先 SIGTERM 给**进程组**（连带其子进程），等 5s 不退升级 SIGKILL；
+  未在运行是幂等空操作
+- `guard.restart {name}`：先停后启，返回新 PID
+- `guard.list`（零参数）：应用 + 实时状态 `running / stopped / crashed`、PID、运行时长、RSS、日志路径与大小
+- `guard.logs {name, lines?}`：日志尾部（默认 100 行、上限 500 行 / 64 KiB，超长标 `truncated`）
+- `guard.remove {name}`：注销；**仍在运行会拒绝**（避免留下无主进程）
+
+::诚实边界（同 pm2 的差异）::
+- **不自动重启**：没有常驻 supervisor 就没人做崩溃拉起。进程退出后状态显示 `crashed` 并带
+  `exit_code` / `last_error`（退出码由回收 goroutine `Wait` 落盘），用户点一次「重启」即拉起；
+  需要「挂了自动起」就用 cron 插件定时调幂等的 `guard.start`
+- **不做编排**：单机单进程，上限 32 个应用；不跨机、不分组、不做健康检查探针
+
+```json
+{"action": "start", "count": 1, "started": 1, "stopped": 0, "failed": 0, "already_running": 0,
+ "apps": [{"name": "web", "dir": "/var/www/web", "script": "/var/www/web/app.js", "args": [],
+           "version": "", "state": "running", "pid": 3328, "uptime_s": 0, "rss_kb": 212,
+           "log_path": "/var/lib/kore/node/guard/web.log", "log_bytes": 162, "hint": "运行中；日志见「日志」"}]}
+```
+
 ## 安全
 
+- **守护的进程边界**：拉起固定 argv（无 shell）、工作目录限定在白名单内、环境变量**剔除全部 `KORE_*`**
+  （不把插件令牌泄漏给被守护应用）、日志文件 0640、守护目录 0750；PID 存活判定用「PID + 启动时刻」双判据
+  （挡住 PID 复用），`Z`（僵尸）/ `X`（已死）一律判为不在运行
 - **root 白名单**：`/var/www`、`/opt`、`/home` 与插件状态目录（`KORE_NODE_ROOT`，默认 `/var/lib/kore/node`）；
   必须是绝对路径、无 NUL / 反斜杠 / `..`；`ResolveExisting`（`EvalSymlinks` + 存在性 + 目录）后再比对归属，
   挡住父目录被换成软链的逃逸
 - **只读**：不执行项目脚本、不写任何宿主文件；`package.json` 读取上限 64 KiB
 - **命令固定 argv + 5s 超时**：`node` / `npm` 一律走 `exec.CommandContext`，无 shell；npm 子进程 `PATH`
   前置该 node 所在目录，保证 shebang 使用配套 node
-- **零轮询**：无 ticker / 后台 goroutine，全部探测都在单次请求内完成
+- **零轮询**：无 ticker / 周期循环，全部探测与启停都在单次请求内完成；唯一的常驻 goroutine 是子进程
+  `Wait` 回收（阻塞在事件上、退出即结束，不是 ticker）
 
 ## 测试
 
@@ -145,6 +198,10 @@ npm/V8/OpenSSL 单项探测失败只让对应字段为空串，不放大为整�
   `versions` 增强字段（`bin_dir` / `package_manager` / `package_manager_path` 同目录优先与 PATH 回退）、
   `paths`（PATH 顺序、默认解析链、来源顺序与 `candidates()` 一致性）、参数严格校验；
   `capability_test` 双向校验 `info.json` 的 `method_capabilities` 与分发表
+- 守护用例（`guard_test.go`，全走假 `GuardIO`，不拉起真实进程）：零参数启动（G-33 A1）、
+  start 幂等、list / stop / restart 状态流转、SIGTERM 无效时升级 SIGKILL、日志尾部行数与顺序、
+  应用名校验 / 目录越界 / `..` 穿越 / 脚本缺失的「怎么办」文案、退出码落盘（`crashed + exit_code`）、
+  版本钉住与清除、运行时解析失败时逐条报错不整次失败
 - 真实 E2E（`tests/e2e/`）：本机真实 Node 版本与 `which node` 一致、真实 npm / V8 / OpenSSL；
   在 `/tmp/kore-node-test` 造 3 个项目（正常 / 坏 JSON / 无 package.json）→ 返回 1 个 + warnings；
   doctor 真实检查项；**真实二进制降级**：空 `PATH` + 空 `HOME` 启动插件，`versions` 返回 `count=0` + 固定 hint（不报错）
