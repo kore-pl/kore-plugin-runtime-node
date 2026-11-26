@@ -189,7 +189,7 @@ func resolveExtPrefix(stateRoot string) (string, *pluginapi.Error) {
 		return "", invalid("请配置插件状态目录后再管理扩展")
 	}
 	if trimmed != stateRoot {
-		return "", invalid("插件状态目录不得含首尾空白")
+		return "", invalid("请去掉插件状态目录首尾空白后重试")
 	}
 	if strings.ContainsRune(trimmed, 0) || strings.Contains(trimmed, "\\") {
 		return "", invalid("插件状态目录含非法字符（NUL / 反斜杠），请改用正斜杠路径")
@@ -252,7 +252,7 @@ func validateExtPackages(packages []string) ([]string, *pluginapi.Error) {
 	out := make([]string, 0, len(packages))
 	for _, pkg := range packages {
 		if !extPackageSpecPattern.MatchString(pkg) {
-			return nil, invalid("包名「" + pkg + "」不合法：只接受字母数字 . _ - 和可选的 ==版本，不要写空格、分号、@scope 或 -g 选项")
+			return nil, invalid(fmt.Sprintf("请检查包名 %q：只接受字母数字 . _ - 和可选的 ==版本，不要写空格、分号、@scope 或 -g 选项", pkg))
 		}
 		out = append(out, pkg)
 	}

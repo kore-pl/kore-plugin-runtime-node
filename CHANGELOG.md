@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.4.1] - 2026-11-26
+
+### Fixed
+
+- 扩展管理两处 `invalid()` 文案补齐引导词（「请检查包名…」「请去掉…首尾空白」），满足 G-33 A3（≥8 字且含请/应/需/例/如），避免本插件 A3 违规数超出 `usability-pending.txt` 登记上限导致存量条目转为 FAIL；不改方法行为与契约。因 dist sha 改变按 RELEASE.md §0 bump patch。
+
 ## [0.4.0] - 2026-11-26
 
 ### Added
