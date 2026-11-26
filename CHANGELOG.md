@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0] - 2026-11-26
+
+### Added
+
+- **运行时扩展管理（隔离安装，不碰宿主）**：新增 `runtime-node.ext.install` / `ext.list` / `ext.remove` 三方法（C13 隔离方案）。照 `runtime-python` 的 venv/pip 范本实现：固定 argv（`npm install/uninstall --prefix <state>/global --no-audit --no-fund --ignore-scripts`）+ 包名白名单（字母数字 . _ - 与可选 `==版本`，挡 `-g`/`@scope`/选项注入）+ 状态目录路径与软链逃逸校验 + 120s 超时 + 输出 64 KiB 首尾截断 + 假执行面注入单测。
+- 安装前缀固定为 `<state>/global/node_modules`，**绝不 `npm -g`、不改宿主全局 npm、不新增 root_action、不动 rootpolicy 形状表**；扩展列表直接从隔离前缀的 `node_modules/*/package.json` 读取，`info.json.method_capabilities` 同步三条（install/remove = `system:admin`，list = `system:read`）。
+- 主壳 `web/runtimes.js` 在 Node tab 内复用既有 venv 面板样式与包校验助手增加「扩展管理」分区（不新增一级控件 / hub / CSS），遵守「加一个控件替换一个」减法；29 条英文文案入懒加载 en-US 包，不占首屏预算。
+
 ## [0.3.2] - 2026-11-26
 
 ### Fixed

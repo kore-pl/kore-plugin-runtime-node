@@ -64,6 +64,12 @@ func Call(method string, params json.RawMessage, stateRoot string, exec Executor
 		return callGuardRemove(params, guard)
 	case "guard.logs":
 		return callGuardLogs(params, guard)
+	case "ext.install":
+		return callExtInstall(params, stateRoot, exec)
+	case "ext.list":
+		return callExtList(params, stateRoot, exec)
+	case "ext.remove":
+		return callExtRemove(params, stateRoot, exec)
 	}
 	return nil, errNotFound(method)
 }
@@ -93,7 +99,7 @@ func businessVerb(method string) (string, bool) {
 	switch verb {
 	case "versions", "info", "projects", "doctor", "paths", "use",
 		"guard.add", "guard.list", "guard.start", "guard.stop", "guard.restart",
-		"guard.remove", "guard.logs":
+		"guard.remove", "guard.logs", "ext.install", "ext.list", "ext.remove":
 		return verb, true
 	}
 	return "", false
@@ -148,6 +154,8 @@ func classify(err error) *pluginapi.Error {
 		return notFound(NoNodeHint)
 	case errors.Is(err, ErrVersionNotInstalled):
 		return invalid(err.Error())
+	case errors.Is(err, ErrExtTimeout):
+		return upstream("调用超时: " + err.Error())
 	}
 	return internalErr("执行面失败: " + err.Error())
 }

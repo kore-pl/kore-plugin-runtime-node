@@ -1,7 +1,7 @@
 {
   "id": "runtime-node",
   "name": "Node 运行时插件",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "protocol": "kore.plugin.v1",
   "lifecycle": "lazy",
   "depth_level": "basic",
@@ -23,7 +23,10 @@
     "runtime-node.guard.logs": "system:read",
     "runtime-node.guard.start": "proc:write",
     "runtime-node.guard.stop": "proc:write",
-    "runtime-node.guard.restart": "proc:write"
+    "runtime-node.guard.restart": "proc:write",
+    "runtime-node.ext.install": "system:admin",
+    "runtime-node.ext.list": "system:read",
+    "runtime-node.ext.remove": "system:admin"
   },
   "triggers": [],
   "requires_kore": ">=0.1.0 <0.2.0",
@@ -37,5 +40,5 @@
   "scenario_tags": [
     "app"
   ],
-  "size_bytes": 1563493
+  "size_bytes": 1574075
 }
